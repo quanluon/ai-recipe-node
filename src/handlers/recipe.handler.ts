@@ -51,10 +51,12 @@ export async function generateRecipeHandler(req: Request, res: Response) {
     log.recipe.generating(dishName);
 
     // RAG retrieval
-    const { context: ragContext, recipesFound } = await ragService.retrieveContext(
+    const { context: ragContext, recipesFound, queriesUsed } = await ragService.retrieveContext(
       dishName,
       providedCategories
     );
+    
+    log.info(`RAG used ${queriesUsed.length} query strategies, found ${recipesFound} recipes`);
 
     // Build prompt
     const categoryInstruction = providedCategories.length > 0 
@@ -93,7 +95,8 @@ export async function generateRecipeHandler(req: Request, res: Response) {
       meta: {
         duration: `${duration}ms`,
         ragUsed: recipesFound > 0,
-        ragRecipes: recipesFound,
+        ragRecipesFound: recipesFound,
+        ragQueriesUsed: queriesUsed,
       },
     });
   } catch (error: any) {
@@ -149,6 +152,41 @@ export async function searchRecipesHandler(req: Request, res: Response) {
       success: false,
       error: "Không thể tìm kiếm công thức.",
     });
+  }
+}
+
+export async function debugSearchHandler(req: Request, res: Response) {
+  const { query } = req.body as { query?: string };
+  
+  if (!query) {
+    return res.status(400).json({ error: "Provide 'query'" });
+  }
+  
+  if (!vectorStoreService.isAvailable()) {
+    return res.status(503).json({ error: "Vector store not available" });
+  }
+  
+  try {
+    // Get raw results with scores (no threshold filtering)
+    const results = await vectorStoreService.searchSimilarRecipes(query, 10, 0); // threshold = 0
+    
+    const debug = results.map(([doc, score]) => ({
+      dishName: doc.metadata?.dishName,
+      score: score.toFixed(4),
+      similarity: (1 - score).toFixed(4),
+      distance: score,
+      metadata: doc.metadata,
+    }));
+    
+    res.json({
+      query,
+      count: results.length,
+      results: debug,
+      info: "Score = cosine distance (0=identical, 2=opposite). Similarity = 1-score",
+    });
+  } catch (error: any) {
+    log.error("Debug search error", error);
+    res.status(500).json({ error: error.message });
   }
 }
 

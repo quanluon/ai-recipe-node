@@ -3,7 +3,8 @@ import { Router } from "express";
 import { 
   generateRecipeHandler, 
   searchRecipesHandler, 
-  vectorStoreStatusHandler 
+  vectorStoreStatusHandler,
+  debugSearchHandler 
 } from "../handlers/recipe.handler";
 import { generateRecipeStreamHandler } from "../handlers/stream.handler";
 import { suggestRecipeFromIngredientsHandler } from "../handlers/suggest.handler";
@@ -19,6 +20,7 @@ router.post("/suggest-from-ingredients", suggestRecipeFromIngredientsHandler);
 
 // Search endpoints
 router.post("/search-recipes", searchRecipesHandler);
+router.post("/debug-search", debugSearchHandler); // Debug endpoint to see scores
 
 // Status endpoints
 router.get("/vector-store-status", vectorStoreStatusHandler);

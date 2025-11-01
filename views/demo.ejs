@@ -76,6 +76,7 @@
         border-left: 4px solid #e0e0e0;
         opacity: 0.5;
         transition: all 0.3s;
+        position: relative;
     }
     
     .phase-item.active {
@@ -88,6 +89,53 @@
         opacity: 1;
         border-left-color: #10b981;
         background: #f0fdf4;
+    }
+    
+    .phase-item.error {
+        opacity: 1;
+        border-left-color: #ef4444;
+        background: #fee2e2;
+    }
+    
+    .phase-loader {
+        display: none;
+        width: 18px;
+        height: 18px;
+        border: 3px solid #e0e0e0;
+        border-top-color: #667eea;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        position: absolute;
+        right: 15px;
+        top: 18px;
+    }
+    
+    .phase-item.active .phase-loader {
+        display: block;
+    }
+    
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    
+    .error-banner {
+        background: #fee2e2;
+        color: #991b1b;
+        padding: 15px 20px;
+        border-radius: 8px;
+        border-left: 4px solid #ef4444;
+        margin: 20px 0;
+        display: none;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .error-banner.show {
+        display: flex;
+    }
+    
+    .error-banner strong {
+        font-weight: 700;
     }
     
     .result-container {
@@ -187,6 +235,14 @@
 <button class="btn-primary" id="generateBtn" onclick="generateRecipe()">🚀 Tạo công thức</button>
 
 <div class="progress-container" id="progressContainer">
+    <div class="error-banner" id="errorBanner">
+        <span style="font-size: 24px;">❌</span>
+        <div>
+            <strong>Lỗi:</strong>
+            <span id="errorMessage"></span>
+        </div>
+    </div>
+    
     <div class="progress-bar-wrapper">
         <div class="progress-bar" id="progressBar">0%</div>
     </div>
@@ -195,22 +251,27 @@
         <div class="phase-item" id="phase-1">
             <div style="font-weight: 600;">1️⃣ Chuẩn bị</div>
             <div style="color: #666; font-size: 14px; margin-top: 5px;" class="phase-message">Đang chờ...</div>
+            <div class="phase-loader"></div>
         </div>
         <div class="phase-item" id="phase-2">
             <div style="font-weight: 600;">2️⃣ Tìm kiếm RAG</div>
             <div style="color: #666; font-size: 14px; margin-top: 5px;" class="phase-message">Đang chờ...</div>
+            <div class="phase-loader"></div>
         </div>
         <div class="phase-item" id="phase-3">
             <div style="font-weight: 600;">3️⃣ Tạo công thức với AI</div>
             <div style="color: #666; font-size: 14px; margin-top: 5px;" class="phase-message">Đang chờ...</div>
+            <div class="phase-loader"></div>
         </div>
         <div class="phase-item" id="phase-4">
             <div style="font-weight: 600;">4️⃣ Lưu vào database</div>
             <div style="color: #666; font-size: 14px; margin-top: 5px;" class="phase-message">Đang chờ...</div>
+            <div class="phase-loader"></div>
         </div>
         <div class="phase-item" id="phase-5">
             <div style="font-weight: 600;">5️⃣ Hoàn thành</div>
             <div style="color: #666; font-size: 14px; margin-top: 5px;" class="phase-message">Đang chờ...</div>
+            <div class="phase-loader"></div>
         </div>
     </div>
 </div>
@@ -238,13 +299,19 @@
         document.getElementById('progressContainer').classList.add('active');
         document.getElementById('resultContainer').classList.remove('active');
         document.getElementById('generateBtn').disabled = true;
+        document.getElementById('errorBanner').classList.remove('show');
         
         // Reset phases
         for (let i = 1; i <= 5; i++) {
             const phase = document.getElementById(`phase-${i}`);
-            phase.classList.remove('active', 'complete');
+            phase.classList.remove('active', 'complete', 'error');
             phase.querySelector('.phase-message').textContent = 'Đang chờ...';
         }
+        
+        // Reset progress bar
+        const progressBar = document.getElementById('progressBar');
+        progressBar.style.width = '0%';
+        progressBar.textContent = '0%';
         
         // SSE streaming
         const requestBody = { dishName, categories, language };
@@ -255,6 +322,10 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody)
         }).then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             
@@ -283,6 +354,7 @@
                                     handleEvent(currentEvent, data);
                                 } catch (e) {
                                     console.error('Parse error:', e);
+                                    showError('Lỗi phân tích dữ liệu: ' + e.message);
                                 }
                                 currentEvent = null;
                                 currentData = '';
@@ -291,12 +363,15 @@
                     });
                     
                     readStream();
+                }).catch(err => {
+                    showError('Lỗi đọc stream: ' + err.message);
+                    document.getElementById('generateBtn').disabled = false;
                 });
             }
             
             readStream();
         }).catch(err => {
-            alert('Lỗi: ' + err.message);
+            showError('Lỗi kết nối: ' + err.message);
             document.getElementById('generateBtn').disabled = false;
         });
     }
@@ -321,9 +396,35 @@
                 document.getElementById('generateBtn').disabled = false;
                 break;
             case 'error':
-                alert('Lỗi: ' + data.message);
+                showError(data.message, data.phase);
                 document.getElementById('generateBtn').disabled = false;
                 break;
+        }
+    }
+    
+    function showError(message, phaseNum) {
+        // Show error banner
+        const errorBanner = document.getElementById('errorBanner');
+        const errorMessage = document.getElementById('errorMessage');
+        errorMessage.textContent = message;
+        errorBanner.classList.add('show');
+        
+        // Mark current phase as error
+        if (phaseNum) {
+            const phase = document.getElementById(`phase-${phaseNum}`);
+            if (phase) {
+                phase.classList.remove('active');
+                phase.classList.add('error');
+                phase.querySelector('.phase-message').textContent = '❌ ' + message;
+            }
+        }
+        
+        // Stop all active phases
+        for (let i = 1; i <= 5; i++) {
+            const p = document.getElementById(`phase-${i}`);
+            if (p && p.classList.contains('active') && i !== phaseNum) {
+                p.classList.remove('active');
+            }
         }
     }
     

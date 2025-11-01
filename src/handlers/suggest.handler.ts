@@ -29,17 +29,31 @@ export async function suggestRecipeFromIngredientsHandler(req: Request, res: Res
       cookingStyle 
     });
 
-    // RAG: Search for recipes using these ingredients
+    // RAG: Search for recipes using these ingredients with multiple strategies
     let similarRecipes: any[] = [];
     if (vectorStoreService.isAvailable()) {
       try {
-        const searchQuery = `món ăn với ${ingredients.join(" ")} ${cookingStyle === "dry" ? "khô" : cookingStyle === "soup" ? "nước canh" : ""}`;
-        const results = await vectorStoreService.searchRecipes(searchQuery, 5);
-        similarRecipes = results.map(doc => ({
-          dishName: doc.metadata?.dishName,
-          ingredients: doc.pageContent.split("Ingredients:")[1]?.split(".")[0] || "",
-        }));
-        log.debug(`Found ${results.length} similar recipes with these ingredients`);
+        // Try multiple query strategies
+        const queries = [
+          `món ăn với ${ingredients.slice(0, 3).join(" ")}`, // First 3 ingredients
+          `${cookingStyle === "dry" ? "món khô xào" : cookingStyle === "soup" ? "món canh nước" : "món ăn"} ${ingredients[0]}`, // Style + first ingredient
+        ];
+        
+        const allResults = new Map<string, any>();
+        for (const searchQuery of queries) {
+          const results = await vectorStoreService.searchRecipes(searchQuery, 5);
+          results.forEach(doc => {
+            if (!allResults.has(doc.metadata?.dishName)) {
+              allResults.set(doc.metadata?.dishName, {
+                dishName: doc.metadata?.dishName,
+                ingredients: doc.pageContent.split("Ingredients:")[1]?.split(".")[0] || "",
+              });
+            }
+          });
+        }
+        
+        similarRecipes = Array.from(allResults.values()).slice(0, 5);
+        log.debug(`Found ${similarRecipes.length} unique similar recipes with these ingredients`);
       } catch (err) {
         log.warn("Failed to search similar recipes");
       }
