@@ -1,13 +1,11 @@
 // src/services/chat.service.ts
-import { BufferMemory } from "langchain/memory";
 import { MongoDBChatMessageHistory } from "@langchain/mongodb";
-import { LLMChain } from "langchain/chains";
 import {
   ChatPromptTemplate,
   MessagesPlaceholder,
-  HumanMessagePromptTemplate,
-  SystemMessagePromptTemplate,
 } from "@langchain/core/prompts";
+import { RunnableWithMessageHistory } from "@langchain/core/runnables";
+import { BaseChatMessageHistory } from "@langchain/core/chat_history";
 import { ENV } from "../config/env";
 import { log } from "../utils/logger";
 import { llmService } from "./llm.service";
@@ -15,8 +13,8 @@ import { vectorStoreService } from "./vector-store.service";
 
 interface UserSession {
   userId: string;
-  memory: BufferMemory;
-  chain: LLMChain;
+  chatHistory: MongoDBChatMessageHistory;
+  chain: RunnableWithMessageHistory<any, any>;
   createdAt: Date;
   lastActivity: Date;
 }
@@ -64,16 +62,10 @@ export class ChatService {
         sessionId: userId,
       });
 
-      // Memory with persistence
-      const memory = new BufferMemory({
-        returnMessages: true,
-        memoryKey: "chat_history",
-        chatHistory: chatHistory,
-      });
-
-      // Conversational prompt
+      // Conversational prompt with message history
       const chatPrompt = ChatPromptTemplate.fromMessages([
-        SystemMessagePromptTemplate.fromTemplate(
+        [
+          "system",
           `Bạn là Chef AI - trợ lý ảo chuyên về nấu ăn.
 
 NHIỆM VỤ:
@@ -88,21 +80,27 @@ HƯỚNG DẪN API:
 - Muốn tìm món tương tự → Gợi ý dùng /search-recipes
 
 PHONG CÁCH: Thân thiện, nhiệt tình, chuyên nghiệp.
-NGÔN NGỮ: Tự động detect và trả lời bằng ngôn ngữ user dùng.`
-        ),
+NGÔN NGỮ: Tự động detect và trả lời bằng ngôn ngữ user dùng.`,
+        ],
         new MessagesPlaceholder("chat_history"),
-        HumanMessagePromptTemplate.fromTemplate("{input}"),
+        ["human", "{input}"],
       ]);
 
-      const chain = new LLMChain({
-        llm: llmService.getChatLLM(),
-        memory: memory,
-        prompt: chatPrompt,
+      // Create chain with message history
+      const baseChain = chatPrompt.pipe(llmService.getChatLLM());
+      
+      const chain = new RunnableWithMessageHistory({
+        runnable: baseChain,
+        getMessageHistory: async (sessionId: string): Promise<BaseChatMessageHistory> => {
+          return chatHistory;
+        },
+        inputMessagesKey: "input",
+        historyMessagesKey: "chat_history",
       });
 
       session = {
         userId,
-        memory,
+        chatHistory,
         chain,
         createdAt: new Date(),
         lastActivity: new Date(),
@@ -150,13 +148,17 @@ NGÔN NGỮ: Tự động detect và trả lời bằng ngôn ngữ user dùng.`
     }
 
     const enhancedMessage = context ? `${message}${context}` : message;
-    const response = await session.chain.call({ input: enhancedMessage });
+    
+    const response = await session.chain.invoke(
+      { input: enhancedMessage },
+      { configurable: { sessionId: userId } }
+    );
 
     return {
-      message: response.response,
+      message: response.content,
       sessionInfo: {
         createdAt: session.createdAt,
-        messageCount: (await session.memory.chatHistory.getMessages()).length,
+        messageCount: (await session.chatHistory.getMessages()).length,
       },
     };
   }
@@ -171,7 +173,7 @@ NGÔN NGỮ: Tự động detect và trả lời bằng ngôn ngữ user dùng.`
       };
     }
 
-    const messages = await session.memory.chatHistory.getMessages();
+    const messages = await session.chatHistory.getMessages();
 
     return {
       exists: true,

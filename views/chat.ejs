@@ -318,8 +318,6 @@
             
             const data = await response.json();
 
-            console.log('data',data);
-            
             if (data.success) {
                 addMessage('ai', data.message);
                 
@@ -359,8 +357,6 @@
     }
     
     function formatMarkdown(text) {
-        console.log('text', text);
-        return text;
         if (!text) return '';
         
         try {
