@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Recipe Generator - SSE Stream Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        
+        .input-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .progress-container {
+            margin-top: 30px;
+            display: none;
+        }
+        
+        .progress-container.active {
+            display: block;
+        }
+        
+        .progress-bar-wrapper {
+            background: #f0f0f0;
+            border-radius: 10px;
+            height: 30px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+        
+        .phase-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #e0e0e0;
+            opacity: 0.5;
+            transition: all 0.3s;
+        }
+        
+        .phase-item.active {
+            opacity: 1;
+            border-left-color: #667eea;
+            background: #f0f4ff;
+        }
+        
+        .phase-item.complete {
+            opacity: 1;
+            border-left-color: #10b981;
+            background: #f0fdf4;
+        }
+        
+        .phase-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .phase-message {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .result-container {
+            margin-top: 30px;
+            display: none;
+        }
+        
+        .result-container.active {
+            display: block;
+        }
+        
+        .recipe-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        
+        .recipe-title {
+            font-size: 24px;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .recipe-meta {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            color: #666;
+        }
+        
+        .recipe-meta span {
+            background: white;
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .recipe-section {
+            margin-bottom: 20px;
+        }
+        
+        .recipe-section h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .ingredient-item {
+            padding: 8px;
+            background: white;
+            margin-bottom: 5px;
+            border-radius: 6px;
+        }
+        
+        .step-item {
+            padding: 12px;
+            background: white;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            border-left: 3px solid #667eea;
+        }
+        
+        .error {
+            background: #fee;
+            border-left-color: #f44;
+            color: #c00;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🍳 AI Recipe Generator</h1>
+        <p class="subtitle">Tạo công thức nấu ăn với SSE Streaming</p>
+        
+        <div class="input-group">
+            <label for="dishName">Tên món ăn</label>
+            <input type="text" id="dishName" placeholder="Ví dụ: Phở Bò, Bún Chả..." />
+        </div>
+        
+        <div class="input-group">
+            <label for="categories">Thể loại</label>
+            <select id="categories" multiple size="3">
+                <option value="quick">Quick (Nhanh)</option>
+                <option value="easy">Easy (Dễ làm)</option>
+                <option value="healthy">Healthy (Lành mạnh)</option>
+            </select>
+        </div>
+        
+        <div class="input-group">
+            <label for="language">Ngôn ngữ</label>
+            <select id="language">
+                <option value="vi">Tiếng Việt</option>
+                <option value="eng">English</option>
+            </select>
+        </div>
+        
+        <button id="generateBtn" onclick="generateRecipe()">Tạo công thức</button>
+        
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar-wrapper">
+                <div class="progress-bar" id="progressBar">0%</div>
+            </div>
+            
+            <div id="phasesList">
+                <div class="phase-item" id="phase-1">
+                    <div class="phase-name">1. Chuẩn bị</div>
+                    <div class="phase-message">Đang chờ...</div>
+                </div>
+                <div class="phase-item" id="phase-2">
+                    <div class="phase-name">2. Tìm kiếm</div>
+                    <div class="phase-message">Đang chờ...</div>
+                </div>
+                <div class="phase-item" id="phase-3">
+                    <div class="phase-name">3. Tạo công thức</div>
+                    <div class="phase-message">Đang chờ...</div>
+                </div>
+                <div class="phase-item" id="phase-4">
+                    <div class="phase-name">4. Xử lý kết quả</div>
+                    <div class="phase-message">Đang chờ...</div>
+                </div>
+                <div class="phase-item" id="phase-5">
+                    <div class="phase-name">5. Hoàn thành</div>
+                    <div class="phase-message">Đang chờ...</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="result-container" id="resultContainer">
+            <div class="recipe-card" id="recipeCard"></div>
+        </div>
+    </div>
+    
+    <script>
+        // API URL - auto-detect or use environment
+        const API_URL = window.location.hostname === 'localhost' 
+            ? 'http://localhost:3000'
+            : window.location.origin;
+        
+        function generateRecipe() {
+            const dishName = document.getElementById('dishName').value;
+            const categories = Array.from(document.getElementById('categories').selectedOptions).map(opt => opt.value);
+            const language = document.getElementById('language').value;
+            
+            if (!dishName) {
+                alert('Vui lòng nhập tên món ăn!');
+                return;
+            }
+            
+            // Reset UI
+            document.getElementById('progressContainer').classList.add('active');
+            document.getElementById('resultContainer').classList.remove('active');
+            document.getElementById('generateBtn').disabled = true;
+            
+            // Reset phases
+            for (let i = 1; i <= 5; i++) {
+                const phase = document.getElementById(`phase-${i}`);
+                phase.classList.remove('active', 'complete');
+                phase.querySelector('.phase-message').textContent = 'Đang chờ...';
+            }
+            
+            // Use fetch for SSE with POST body
+            fetch(`${API_URL}/generate-recipe-stream`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dishName, categories, language })
+            }).then(response => {
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                function readStream() {
+                    reader.read().then(({ done, value }) => {
+                        if (done) {
+                            document.getElementById('generateBtn').disabled = false;
+                            return;
+                        }
+                        
+                        const text = decoder.decode(value);
+                        const lines = text.split('\n');
+                        
+                        let currentEvent = null;
+                        let currentData = '';
+                        
+                        lines.forEach(line => {
+                            if (line.startsWith('event:')) {
+                                currentEvent = line.substring(7).trim();
+                            } else if (line.startsWith('data:')) {
+                                currentData = line.substring(6).trim();
+                                
+                                if (currentEvent && currentData) {
+                                    try {
+                                        const data = JSON.parse(currentData);
+                                        handleEvent(currentEvent, data);
+                                    } catch (e) {
+                                        console.error('Parse error:', e);
+                                    }
+                                    currentEvent = null;
+                                    currentData = '';
+                                }
+                            }
+                        });
+                        
+                        readStream();
+                    });
+                }
+                
+                readStream();
+            });
+        }
+        
+        function handleEvent(event, data) {
+            console.log(event, data);
+            
+            switch (event) {
+                case 'start':
+                    console.log('Started:', data.message);
+                    break;
+                    
+                case 'phase':
+                    updatePhase(data.phase, data.message, data.progress, 'active');
+                    if (data.phase > 1) {
+                        updatePhase(data.phase - 1, '', 0, 'complete');
+                    }
+                    break;
+                    
+                case 'rag':
+                    const phase2 = document.getElementById('phase-2');
+                    phase2.querySelector('.phase-message').textContent = data.message;
+                    break;
+                    
+                case 'complete':
+                    updatePhase(5, data.message, 100, 'complete');
+                    displayRecipe(data.recipe, data.duration);
+                    document.getElementById('generateBtn').disabled = false;
+                    break;
+                    
+                case 'error':
+                    alert('Lỗi: ' + data.message);
+                    document.getElementById('generateBtn').disabled = false;
+                    break;
+            }
+        }
+        
+        function updatePhase(phaseNum, message, progress, status) {
+            const phase = document.getElementById(`phase-${phaseNum}`);
+            if (message) {
+                phase.querySelector('.phase-message').textContent = message;
+            }
+            if (status === 'active') {
+                phase.classList.add('active');
+                phase.classList.remove('complete');
+            } else if (status === 'complete') {
+                phase.classList.remove('active');
+                phase.classList.add('complete');
+            }
+            
+            if (progress) {
+                document.getElementById('progressBar').style.width = progress + '%';
+                document.getElementById('progressBar').textContent = progress + '%';
+            }
+        }
+        
+        function displayRecipe(recipe, duration) {
+            document.getElementById('resultContainer').classList.add('active');
+            
+            // Handle steps - can be array or object
+            let sortedSteps = [];
+            if (Array.isArray(recipe.steps)) {
+                sortedSteps = recipe.steps.sort((a, b) => a.stepNumber - b.stepNumber);
+            } else if (recipe.steps && typeof recipe.steps === 'object') {
+                // Handle object format (step1, step2, step3...)
+                sortedSteps = Object.entries(recipe.steps)
+                    .filter(([key]) => key.startsWith('step'))
+                    .map(([key, step]) => ({
+                        stepNumber: parseInt(key.replace('step', '')),
+                        ...step
+                    }))
+                    .sort((a, b) => a.stepNumber - b.stepNumber);
+            }
+            
+            const html = `
+                <div class="recipe-title">${recipe.dishName}</div>
+                <p style="margin-bottom: 20px; color: #555; line-height: 1.6;">${recipe.description}</p>
+                <div class="recipe-meta">
+                    <span>⏱️ Chuẩn bị: ${recipe.prepTime}</span>
+                    <span>🔥 Nấu: ${recipe.cookTime}</span>
+                    <span>👥 Phục vụ: ${recipe.servings}</span>
+                    <span>⚡ Tạo trong: ${duration}</span>
+                </div>
+                <div class="recipe-section">
+                    <h3>📝 Nguyên liệu (${recipe.ingredients.length} món)</h3>
+                    ${recipe.ingredients.map((ing, idx) => 
+                        `<div class="ingredient-item">
+                            <span style="color: #667eea; font-weight: 600;">${idx + 1}.</span>
+                            ${ing.name}: <strong>${ing.quantity}</strong>
+                        </div>`
+                    ).join('')}
+                </div>
+                <div class="recipe-section">
+                    <h3>👨‍🍳 Các bước thực hiện (${sortedSteps.length} bước)</h3>
+                    ${sortedSteps.length > 0 ? sortedSteps.map(step => {
+                        return `<div class="step-item">
+                            <div style="display: flex; align-items: flex-start; gap: 15px;">
+                                <div style="background: #667eea; color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0; font-size: 16px;">
+                                    ${step.stepNumber}
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="color: #333; line-height: 1.8; font-size: 15px;">${step.description}</div>
+                                </div>
+                            </div>
+                        </div>`;
+                    }).join('') : '<p style="color: #999; text-align: center; padding: 20px;">⚠️ Không có bước nào được tạo</p>'}
+                </div>
+                <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 2px dashed #e0e0e0;">
+                    <p style="color: #667eea; font-size: 14px; margin-bottom: 5px;">
+                        ⚡ Thời gian tạo: ${recipe.generationTime}
+                    </p>
+                    <p style="color: #999; font-size: 12px;">
+                        📅 ${new Date(recipe.generatedAt).toLocaleString('vi-VN')}
+                    </p>
+                </div>
+            `;
+            
+            document.getElementById('recipeCard').innerHTML = html;
+            
+            // Scroll to result
+            document.getElementById('resultContainer').scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'nearest' 
+            });
+        }
+    </script>
+</body>
+</html>
+
