@@ -1,18 +1,22 @@
 // src/utils/logger.ts
 import pino from "pino";
+import { ENV } from "../config/env";
+
+const isDevelopment = ENV.NODE_ENV === "development" || !ENV.NODE_ENV;
 
 export const logger = pino({
   level: "trace", // Log all levels: trace, debug, info, warn, error, fatal
-  transport: {
-    target: "pino-pretty",
-    options: {
-      colorize: true,
-      translateTime: "HH:MM:ss",
-      ignore: "pid,hostname",
-      // Show all log levels with colors
-      levelFirst: true,
+  ...(isDevelopment && {
+    transport: {
+      target: "pino-pretty",
+      options: {
+        colorize: true,
+        translateTime: "HH:MM:ss",
+        ignore: "pid,hostname",
+        levelFirst: true,
+      },
     },
-  },
+  }),
   formatters: {
     level: (label) => {
       return { level: label };
