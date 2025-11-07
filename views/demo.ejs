@@ -234,15 +234,16 @@
 
 <button class="btn-primary" id="generateBtn" onclick="generateRecipe()">🚀 Tạo công thức</button>
 
-<div class="progress-container" id="progressContainer">
-    <div class="error-banner" id="errorBanner">
-        <span style="font-size: 24px;">❌</span>
-        <div>
-            <strong>Lỗi:</strong>
-            <span id="errorMessage"></span>
-        </div>
+<!-- Error banner (outside progress container so it's always visible) -->
+<div class="error-banner" id="errorBanner">
+    <span style="font-size: 24px;">❌</span>
+    <div>
+        <strong>Lỗi:</strong>
+        <span id="errorMessage"></span>
     </div>
-    
+</div>
+
+<div class="progress-container" id="progressContainer">
     <div class="progress-bar-wrapper">
         <div class="progress-bar" id="progressBar">0%</div>
     </div>
@@ -296,10 +297,16 @@
         }
         
         // Reset UI
+        console.log('Resetting UI...');
         document.getElementById('progressContainer').classList.add('active');
         document.getElementById('resultContainer').classList.remove('active');
         document.getElementById('generateBtn').disabled = true;
-        document.getElementById('errorBanner').classList.remove('show');
+        
+        // Reset error banner
+        const errorBanner = document.getElementById('errorBanner');
+        const errorMessage = document.getElementById('errorMessage');
+        errorBanner.classList.remove('show');
+        errorMessage.innerHTML = '';
         
         // Reset phases
         for (let i = 1; i <= 5; i++) {
@@ -322,16 +329,21 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody)
         }).then(async response => {
+            console.log('Response status:', response.status, response.ok);
+            
             if (!response.ok) {
                 // Try to parse error response (validation errors)
                 try {
                     const errorData = await response.json();
+                    console.log('Error data:', errorData);
+                    
                     if (errorData.error) {
                         showValidationError(errorData);
                         document.getElementById('generateBtn').disabled = false;
                         return;
                     }
                 } catch (e) {
+                    console.error('Failed to parse error JSON:', e);
                     // If not JSON, show generic error
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
@@ -440,26 +452,40 @@
     }
     
     function showValidationError(errorData) {
+        console.log('showValidationError called with:', errorData);
+        
         // Build detailed error message
-        let message = errorData.error;
+        let message = errorData.error || 'Có lỗi xảy ra';
         
         // Add violations if available
         if (errorData.violations && errorData.violations.length > 0) {
-            message += '\n\n📋 Chi tiết:\n' + errorData.violations.map(v => '• ' + v).join('\n');
+            message += '<br><br><strong>📋 Chi tiết:</strong><br>' + 
+                       errorData.violations.map(v => '• ' + v).join('<br>');
         }
         
         // Add AI reason if available
         if (errorData.reason) {
-            message += '\n\n💡 ' + errorData.reason;
+            message += '<br><br><strong>💡 Lý do:</strong><br>' + errorData.reason;
         }
+        
+        console.log('Final error message:', message);
         
         // Show error banner with formatted message
         const errorBanner = document.getElementById('errorBanner');
         const errorMessage = document.getElementById('errorMessage');
-        errorMessage.innerHTML = message.replace(/\n/g, '<br>');
+        
+        if (!errorBanner || !errorMessage) {
+            console.error('Error banner elements not found!');
+            alert(message.replace(/<br>/g, '\n').replace(/<[^>]*>/g, ''));
+            return;
+        }
+        
+        errorMessage.innerHTML = message;
         errorBanner.classList.add('show');
         
-        // Hide progress container
+        console.log('Error banner should be visible now');
+        
+        // Hide progress container (phases)
         document.getElementById('progressContainer').classList.remove('active');
     }
     
