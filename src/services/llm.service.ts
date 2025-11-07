@@ -51,19 +51,23 @@ export class LLMService {
     return this.provider.getStructuredLLM();
   }
 
-  async generateRecipe(prompt: string, timeout: number = ENV.REQUEST_TIMEOUT, retries: number = 2) {
+  async generateRecipe(prompt: string, timeout: number = ENV.REQUEST_TIMEOUT, retries: number = 3) {
     const startTime = Date.now();
     let lastError: Error | null = null;
     
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
         if (attempt > 0) {
-          // Wait before retry (exponential backoff)
-          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+          // Wait before retry (exponential backoff with jitter)
+          const baseDelay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+          const jitter = Math.random() * 500; // Add random jitter to avoid thundering herd
+          const delay = baseDelay + jitter;
+          
+          log.warn(`Retry attempt ${attempt}/${retries} after ${Math.round(delay)}ms delay...`);
           await new Promise(resolve => setTimeout(resolve, delay));
-          console.log(`Retry attempt ${attempt}/${retries} after ${delay}ms delay...`);
         }
         
+        // Add timeout wrapper
         const result = await Promise.race([
           this.getStructuredLLM().invoke(prompt),
           new Promise((_, reject) =>
@@ -73,46 +77,102 @@ export class LLMService {
         
         const duration = Date.now() - startTime;
         
-        // Validate result
+        // Validate result structure
         if (!result || typeof result !== 'object') {
           throw new Error("Invalid response from LLM: result is not an object");
         }
         
+        // Additional validation for required fields
+        if (!result.dishName || !result.ingredients || !result.steps) {
+          throw new Error("Invalid response from LLM: missing required fields");
+        }
+        
+        log.info(`Recipe generated successfully in ${duration}ms (attempt ${attempt + 1})`);
         return { result, duration };
+        
       } catch (error: any) {
         lastError = error;
+        const errorMsg = error.message || error.toString();
         
-        // Don't retry on timeout or validation errors
-        if (error.message?.includes('timeout') || error.message?.includes('Invalid response')) {
+        // Check if it's a retryable error
+        const isPartsError = errorMsg.includes('parts') || errorMsg.includes('Cannot read properties of undefined');
+        const isRateLimitError = errorMsg.includes('rate_limit') || errorMsg.includes('429') || errorMsg.includes('quota');
+        const isTimeoutError = errorMsg.includes('timeout');
+        const isNetworkError = errorMsg.includes('ECONNRESET') || errorMsg.includes('ETIMEDOUT') || errorMsg.includes('fetch failed');
+        
+        // Don't retry on validation errors or final timeout
+        if (errorMsg.includes('Invalid response') && !isPartsError) {
+          log.error(`Non-retryable validation error: ${errorMsg}`);
           break;
         }
         
-        // Log retry attempt
-        if (attempt < retries) {
-          console.warn(`Attempt ${attempt + 1} failed: ${error.message}. Retrying...`);
+        // Log detailed error for debugging
+        log.error(`Attempt ${attempt + 1}/${retries + 1} failed`, {
+          error: errorMsg,
+          provider: this.getProviderName(),
+          isPartsError,
+          isRateLimitError,
+          isTimeoutError,
+          isNetworkError,
+        });
+        
+        // If this is the last attempt, break
+        if (attempt >= retries) {
+          break;
+        }
+        
+        // For parts errors, wait longer before retry
+        if (isPartsError && attempt < retries) {
+          const extraDelay = 2000;
+          log.warn(`Parts error detected, adding extra ${extraDelay}ms delay before retry...`);
+          await new Promise(resolve => setTimeout(resolve, extraDelay));
         }
       }
     }
     
-    // Better error messages based on provider
+    // Build user-friendly error message
     const providerName = this.getProviderName();
+    const errorMsg = lastError?.message || lastError?.toString() || 'Unknown error';
     
-    if (lastError?.message?.includes('parts')) {
+    // Parts error (common Gemini issue)
+    if (errorMsg.includes('parts') || errorMsg.includes('Cannot read properties of undefined')) {
       throw new Error(
-        `${providerName === 'gemini' ? 'Gemini' : 'LLM'} API error: Response format invalid. This usually means rate limit or API error. Please try again in a few moments.`
+        `${providerName === 'gemini' ? 'Gemini' : 'LLM'} API returned malformed response. This is usually temporary. Please try again in a few seconds.`
       );
     }
     
-    if (lastError?.message?.includes('timeout')) {
-      throw new Error(`Request timeout after ${timeout}ms. Try a simpler recipe or increase timeout.`);
+    // Rate limit errors
+    if (errorMsg.includes('rate_limit') || errorMsg.includes('429')) {
+      throw new Error(
+        `${providerName.toUpperCase()} rate limit exceeded. Please wait a moment and try again.`
+      );
     }
     
-    if (lastError?.message?.includes('rate_limit') || lastError?.message?.includes('429')) {
-      throw new Error(`${providerName.toUpperCase()} rate limit exceeded. Please try again in a few moments.`);
+    // Quota errors
+    if (errorMsg.includes('quota') || errorMsg.includes('InsufficientQuota')) {
+      throw new Error(
+        `${providerName.toUpperCase()} quota exceeded. ${providerName === 'openai' ? 'Try switching to Gemini (free) by setting LLM_PROVIDER=gemini' : 'Please check your API quota.'}`
+      );
     }
     
-    // Re-throw with more context
-    throw new Error(`[${providerName.toUpperCase()}] Recipe generation failed after ${retries + 1} attempts: ${lastError?.message || 'Unknown error'}`);
+    // Timeout errors
+    if (errorMsg.includes('timeout')) {
+      throw new Error(
+        `Request timeout after ${timeout}ms. The recipe might be too complex. Try a simpler dish or increase REQUEST_TIMEOUT in .env`
+      );
+    }
+    
+    // Network errors
+    if (errorMsg.includes('ECONNRESET') || errorMsg.includes('ETIMEDOUT') || errorMsg.includes('fetch failed')) {
+      throw new Error(
+        `Network error connecting to ${providerName.toUpperCase()} API. Please check your internet connection and try again.`
+      );
+    }
+    
+    // Generic error with context
+    throw new Error(
+      `[${providerName.toUpperCase()}] Recipe generation failed after ${retries + 1} attempts: ${errorMsg}`
+    );
   }
 }
 

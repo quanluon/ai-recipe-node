@@ -23,7 +23,17 @@ export const StepsArraySchema = z
 export const IngredientSchema = z.object({
   name: z.string().describe("Tên nguyên liệu"),
   quantity: z.string().describe("Số lượng và đơn vị (ví dụ: 2 củ)"),
+  calories: z.number().describe("Calories ước tính cho số lượng nguyên liệu này (kcal)"),
   whereToFind: z.string().describe("Gợi ý nơi mua ở Việt Nam (vd: Chợ, siêu thị, cửa hàng thực phẩm)").optional(),
+});
+
+export const NutritionSchema = z.object({
+  calories: z.number().describe("Tổng calories (kcal) cho một suất ăn"),
+  protein: z.number().describe("Protein (g) cho một suất ăn"),
+  carbs: z.number().describe("Carbohydrate (g) cho một suất ăn"),
+  fat: z.number().describe("Chất béo (g) cho một suất ăn"),
+  fiber: z.number().describe("Chất xơ (g) cho một suất ăn").optional(),
+  sodium: z.number().describe("Natri (mg) cho một suất ăn").optional(),
 });
 
 export const RecipeSchema = z.object({
@@ -37,8 +47,10 @@ export const RecipeSchema = z.object({
     .describe("Danh sách các nguyên liệu cần thiết với gợi ý nơi mua."),
   steps: StepsArraySchema,
   shoppingTips: z.string().describe("Lời khuyên chung về mua nguyên liệu ở Việt Nam (chợ nào tốt, thời gian nào rẻ)").optional(),
+  nutrition: NutritionSchema.describe("Thông tin dinh dưỡng ước tính cho một suất ăn"),
 });
 
 export type Recipe = z.infer<typeof RecipeSchema>;
 export type RecipeStep = z.infer<typeof StepsArraySchema>[number];
+export type Nutrition = z.infer<typeof NutritionSchema>;
 

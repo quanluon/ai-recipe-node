@@ -34,6 +34,8 @@ export class GeminiProvider implements ILLMProvider {
     this.chatLLM = chatModel as BaseChatModel;
 
     // Structured output for recipes
+    // Note: The 'parts' error from Gemini is usually due to rate limiting or API issues
+    // The retry logic in llm.service.ts handles these errors
     this.structuredLLM = recipeModel.withStructuredOutput(RecipeSchema, {
       name: "recipe",
     });
