@@ -1,266 +1,214 @@
 # 🧩 SOFTWARE REQUIREMENTS SPECIFICATION (SRS)
-## Project: FitAI – AI Fitness Trainer
-**Version:** 1.0 MVP  
+## Project: FitAI – AI Visual Trainer  
+**Version:** 1.1 (Enhanced Concept: Visual + KOL Synthesis)  
 **Date:** 2025-11-07  
-**Author:** Business Analyst Team
+**Author:** BA Team  
 
 ---
 
-## 1️⃣. Introduction
+## 1️⃣. Introduction  
 
-### 1.1. Purpose
-This document describes the **Software Requirements Specification (SRS)** for the FitAI web application — an **AI-driven fitness trainer** platform that generates personalized workout and meal plans using data crawled from fitness influencers (TikTok, YouTube, etc.) and adapts dynamically to user progress.
+### 1.1 Purpose  
+FitAI là nền tảng AI Trainer giúp người dùng:  
+- **Chụp ảnh / nhập dữ liệu cơ thể** → AI phân tích dáng người, ước lượng body fat, và đưa gợi ý tập – ăn – tư thế.  
+- **Gợi ý giống như tổng hợp từ các huấn luyện viên / influencer nổi tiếng** (TikTok, YouTube, fitness blogs).  
+- **Sinh plan tập luyện & meal plan hàng ngày**, tối ưu theo vóc dáng và mục tiêu.  
 
-### 1.2. Scope
-FitAI provides a **personalized AI Trainer** capable of:
-- Generating daily/weekly **workout plans** based on the user’s goal (muscle gain, fat loss, maintenance).
-- Recommending **meal plans** and calculating caloric/macronutrient needs.
-- Tracking **user performance** (e.g., bench press 60kg → 70kg next week).
-- Learning continuously from influencer content (exercise tips, meal routines) to improve recommendations.
-
-The platform focuses on fast, minimal UX interactions: one-click tracking, easy plan regeneration, and weekly AI feedback.
-
-### 1.3. Definitions, Acronyms, Abbreviations
-| Term | Description |
-|------|--------------|
-| AI Trainer | Virtual personal trainer powered by AI |
-| RAG | Retrieval-Augmented Generation – combining AI with crawled content |
-| PT | Personal Trainer |
-| KPI | Key Performance Indicator |
-
-### 1.4. References
-- TikTok / YouTube influencer datasets  
-- OpenAI GPT-4o API documentation  
-- Supabase, Next.js, NestJS documentation
+> Người dùng cảm thấy như đang được “AI tổng hợp từ các PT nổi tiếng” hướng dẫn — nhưng thực tế, hệ thống dùng **AI gợi ý dựa trên data mẫu + mô phỏng insight từ KOL**, không cần xác thực nguồn từng người.  
 
 ---
 
-## 2️⃣. Overall Description
-
-### 2.1. Product Perspective
-FitAI acts as an **AI replacement for human trainers**, capable of personalized planning, progress tracking, and continuous adaptation. It integrates:
-- Crawling subsystem (data collection)
-- AI planning subsystem (plan generation)
-- Tracking & analytics (user data feedback loop)
-
-### 2.2. Product Functions
-- User registration and goal setting  
-- AI workout & meal plan generation  
-- Daily workout tracking  
-- Weekly AI progress feedback  
-- Dashboard visualization (charts, calories, progress)
-
-### 2.3. User Characteristics
-| Type | Description | Technical Level |
-|------|--------------|----------------|
-| Beginner | New to fitness, needs easy guidance | Low |
-| Intermediate | Regular gym-goer tracking strength | Medium |
-| Athlete | Advanced user focusing on optimization | High |
-
-### 2.4. Constraints
-- Limited to static crawled data for MVP (no realtime updates)
-- Only web-first interface (mobile PWA optional)
-- Requires AI API connectivity (OpenAI/Claude)
-- Privacy compliance for user health data (GDPR)
+### 1.2 Scope  
+Ứng dụng web-first (PWA) gồm các module:  
+- 📸 Body Analyzer: Chụp ảnh, nhận diện dáng, ước lượng body fat, và phân loại kiểu hình cơ thể (body type).  
+- 🤖 AI Coach: Đưa ra lời khuyên sửa vóc dáng, gợi ý bài tập và meal plan phù hợp.  
+- 📊 Progress Tracker: Theo dõi body fat, cân nặng, và tiến bộ luyện tập theo thời gian.  
+- 💡 KOL Suggestion Mode: Giao diện hiển thị gợi ý “inspired by top influencers” để tăng độ tin cậy & hứng thú.  
 
 ---
 
-## 3️⃣. Functional Requirements
+### 1.3 Definitions & Terms  
+| Term | Meaning |
+|------|----------|
+| KOL | Key Opinion Leader (TikTok / YouTube fitness coach) |
+| BodyPix | Google AI model for body segmentation |
+| Visual Analyzer | Module xử lý ảnh, xác định tỷ lệ cơ – mỡ |
+| AI Coach | GPT/Claude-based logic engine sinh lời khuyên cá nhân hóa |
 
-### 3.1. User Registration and Profile
-**Description:** Collect personal data for plan generation.  
-**Inputs:** Email, Gender, Age, Height, Weight, Goal (gain/loss), Activity level.  
-**Outputs:** Stored user profile.  
-**Priority:** High.
+---
 
-**Data Example:**
+## 2️⃣. System Overview  
+
+### 2.1 Product Perspective  
+FitAI gồm 3 lớp:  
+1. **Frontend (Next.js)** – giao diện chụp ảnh, xem kết quả, và nhận gợi ý.  
+2. **AI Layer (LangChain + TensorFlow/BodyPix)** – xử lý ảnh và sinh lời khuyên.  
+3. **Backend (NestJS + Supabase)** – lưu dữ liệu người dùng, log kế hoạch, và phản hồi AI.  
+
+---
+
+### 2.2 Key Product Functions  
+| Module | Mô tả |
+|---------|-------|
+| Body Analyzer | Phân tích ảnh, nhận dạng dáng người, ước lượng body fat |
+| AI Suggestion | Sinh plan tập + meal plan mỗi ngày |
+| Visual Feedback | Đưa gợi ý sửa form, cân bằng dáng (AI mô phỏng PT) |
+| KOL Simulation | Hiển thị “source style” như: “Theo phong cách của Jeff Nippard / Chloe Ting / Chris Bumstead” |
+| Dashboard | Hiển thị tiến trình & biểu đồ thay đổi vóc dáng |
+
+---
+
+## 3️⃣. Functional Requirements  
+
+### 3.1 Body Analyzer  
+**Goal:** Chụp ảnh → phân tích hình thể → đưa kết quả body fat và gợi ý sơ bộ.  
+
+**Flow:**  
+1. User chụp ảnh toàn thân (mặt trước hoặc bên hông).  
+2. AI model (BodyPix / MediaPipe) tách vùng cơ thể.  
+3. Hệ thống tính:  
+   - `waist/shoulder ratio`  
+   - `hip/waist ratio`  
+   - `estimated body fat`  
+4. Hiển thị kết quả:  
+   - “Bạn đang ở mức 22% body fat (Fit level).”  
+   - “Cần tập trung vào phần core và giảm vùng bụng dưới.”  
+
+**Sample Output:**
 ```json
 {
-  "userId": "uuid",
-  "email": "string",
-  "gender": "male",
-  "height": 175,
-  "weight": 70,
-  "goal": "gain_muscle",
-  "activityLevel": 3
+  "bodyFat": 21.8,
+  "shapeType": "Mesomorph",
+  "focusArea": ["core", "legs"],
+  "confidence": 0.82
 }
 ```
 
 ---
 
-### 3.2. AI Plan Generation (Workout & Meal)
-**Description:** Generate plans using AI + influencer dataset.  
-**Inputs:** user profile, influencer dataset, progress history.  
-**Outputs:** JSON structured plan (7-day).  
-**Priority:** Critical.
+### 3.2 AI Suggestion Module  
+**Goal:** Sinh ra kế hoạch tập và meal plan dựa trên hình thể + mục tiêu.  
+**Behavior:**
+- Gợi ý ngắn, dễ đọc, giống như PT nói chuyện (“Hôm nay nên tập push – chú ý giữ form ngực và vai”).  
+- Có thể thêm hiệu ứng “AI lấy cảm hứng từ KOLs”.  
 
-**Example Output:**
+**Example Response (AI style):**
+> 💡 *“Dựa trên form vai của bạn, tôi đề xuất bài tập giống phương pháp của Chris Bumstead – tập vai 3 hiệp lateral raise nhẹ nhưng chậm.”*  
+
+---
+
+### 3.3 KOL Simulation Layer  
+- Không cần xác thực nguồn thực (vì nhiều người dùng không phân biệt được).  
+- Tạo trải nghiệm như “FitAI tổng hợp kiến thức từ hàng nghìn PT”.  
+- Text hiển thị gợi ý như:  
+  - “Theo phong cách tập luyện từ các HLV nổi tiếng…”  
+  - “AI tổng hợp xu hướng tập vai hiệu quả trên TikTok Fitness 2025.”  
+
+---
+
+### 3.4 Daily Plan Generator  
+Sinh **plan tập luyện & meal plan mỗi ngày** (auto-refresh hoặc user click “Regenerate”).  
+
+**Workout Plan Example:**
 ```json
 {
-  "workoutPlan": [
-    {"day": "Monday", "focus": "Chest", "exercises": [
-      {"name": "Bench Press", "sets": 4, "reps": 10, "video": "https://..."}
-    ]}
-  ],
-  "mealPlan": [
-    {"meal": "Breakfast", "calories": 450, "items": ["Oatmeal", "Egg Whites"]}
+  "day": "Tuesday",
+  "focus": "Legs",
+  "exercises": [
+    {"name": "Squat", "sets": 4, "reps": 12},
+    {"name": "Lunges", "sets": 3, "reps": 10}
   ]
 }
 ```
 
-**Functional Flow:**
-1. User submits goal.  
-2. AI model queries RAG vector DB (TikTok influencers).  
-3. Generates a personalized plan.  
-4. User can “Regenerate” anytime.
-
----
-
-### 3.3. Workout Tracking
-**Description:** Record exercise completion and strength progress.  
-**Inputs:** exercise name, sets, reps, weight, completion flag.  
-**Outputs:** Progress logs, trend charts.  
-**Priority:** High.
-
-**Flow:**
-1. User marks exercise “Done.”  
-2. System logs performance (auto time-stamped).  
-3. Weekly AI reviews improvement (% increase in load).
-
-**Example:**
+**Meal Plan Example:**
 ```json
 {
-  "userId": "uuid",
-  "exercise": "Bench Press",
-  "date": "2025-11-07",
-  "weight": 60,
-  "reps": 10,
-  "sets": 4,
-  "status": "done"
+  "breakfast": "Oatmeal + 3 egg whites",
+  "lunch": "Chicken breast with rice",
+  "dinner": "Salmon with veggies",
+  "totalCalories": 2100
 }
 ```
 
 ---
 
-### 3.4. Meal Tracking
-**Description:** User tracks daily meals and caloric intake.  
-**Inputs:** meal, portion size, calories.  
-**Outputs:** daily nutrition summary.  
-**Priority:** Medium.
+### 3.5 Visual Feedback (Pose & Form Correction)  
+**Goal:** Khi user chụp ảnh, AI phát hiện lỗi form, gợi ý cải thiện tư thế.  
 
-**UI Features:**
-- Pie chart: % macro distribution  
-- Progress bar: calories consumed vs target  
+**Example:**  
+> “Phần vai của bạn hơi gù, nên thêm bài tập *face pull* để cải thiện posture.”  
+> “Cánh tay trái thấp hơn bên phải khi đứng – gợi ý tập cân bằng cơ vai.”  
 
 ---
 
-### 3.5. Progress Analytics & Feedback
-**Description:** Weekly AI feedback based on logs.  
-**Inputs:** past week’s performance data.  
-**Outputs:** AI-generated feedback message.  
-**Priority:** Medium.
-
-**Example Output:**
-```json
-{
-  "weekStats": {
-    "avgCalories": 2200,
-    "avgWeightLifted": 70
-  },
-  "aiFeedback": "Tốt lắm! Tuần tới hãy tăng 5% mức tạ trung bình."
-}
-```
+### 3.6 Dashboard & Progress Tracker  
+Hiển thị biểu đồ thay đổi body fat, muscle tone và calories:  
+- **Chart 1:** Body Fat % theo tuần  
+- **Chart 2:** Weight Trend  
+- **Chart 3:** Calories consumed vs burned  
 
 ---
 
-## 4️⃣. Non-Functional Requirements
-
+## 4️⃣. Non-Functional Requirements  
 | Category | Requirement |
-|-----------|--------------|
-| Performance | Dashboard loads < 2 seconds |
-| Scalability | Support up to 10k active users in MVP |
-| Security | JWT-based Auth via Supabase |
-| Data Privacy | No public exposure of personal data |
-| Availability | 99% uptime target |
-| AI Model | GPT-4o or Claude 3 Haiku |
-| UI | Tailwind + Shadcn (clean, responsive) |
-| Hosting | Vercel (FE), Render/Fly.io (BE) |
+|-----------|-------------|
+| Performance | Phân tích ảnh < 5s |
+| Privacy | Ảnh xử lý cục bộ hoặc xóa ngay sau phân tích |
+| Scalability | Hỗ trợ 10k người dùng song song |
+| AI Model | GPT-4o / Claude 3 Haiku + BodyPix |
+| UX | PWA – thao tác 1 chạm, cảm giác giống Instagram/TikTok |
+| Display | Gợi ý bằng text + ảnh minh họa “AI Inspired” |
+| Compliance | Ẩn danh dữ liệu người dùng (no facial recognition) |
 
 ---
 
-## 5️⃣. System Architecture Overview
-
+## 5️⃣. System Architecture  
 ```
 Frontend (Next.js)
- ├── Auth & Profile
- ├── Workout / Meal Dashboard
- ├── AI Trainer Chat
+ ├── Camera Capture + Body Analyzer (BodyPix.js)
+ ├── AI Suggestion Interface
+ ├── Dashboard (Charts / Plans)
        ↓
-Backend (NestJS)
- ├── User API / Plan / Progress
- ├── AI Engine (LangChain + OpenAI)
- ├── Vector Store (Supabase Vector)
- └── Weekly Feedback Scheduler
+Backend (NestJS + Supabase)
+ ├── User/Profile API
+ ├── AI Planner (LangChain)
+ ├── Vision Model Wrapper (Python microservice)
+ └── Storage (encrypted Supabase)
 ```
 
 ---
 
-## 6️⃣. Database Schema (MVP)
-
-| Table | Description | Key Fields |
-|--------|--------------|------------|
-| users | Profile data | id, gender, goal, weight |
-| plans | AI-generated plans | id, userId, jsonData |
-| progress | Workout logs | id, userId, date, exercise |
-| meals | Food intake logs | id, userId, calories |
-| feedback | Weekly AI tips | id, userId, week, text |
-
----
-
-## 7️⃣. External Interfaces
-
-| Interface | Description |
-|------------|-------------|
-| OpenAI API | Generate workout/meal plans |
-| Supabase | Auth, DB, and storage |
-| TikTok Crawler | Data collection for RAG |
-| Redis Cache | Temporary plan storage |
-
----
-
-## 8️⃣. System Flow Summary
-
+## 6️⃣. User Flow Summary  
 ```
-[User SignUp] → [Input Goals]
-→ [AI Generates Plan]
-→ [User Follows Plan]
-→ [Logs Workouts/Meals]
-→ [AI Analyzes Progress]
-→ [Weekly Feedback Generated]
+[Upload/Take Photo]
+   ↓
+[AI analyzes body & fat]
+   ↓
+[Visual Feedback + Posture Suggestion]
+   ↓
+[Generate Workout & Meal Plan]
+   ↓
+[Daily Dashboard + Progress Chart]
 ```
 
 ---
 
-## 9️⃣. Future Enhancements
-
-- Real-time TikTok crawling and influencer ranking  
-- Pose detection (AI form correction)  
-- Smartwatch synchronization (Apple, Fitbit)  
-- Community & leaderboard challenges  
-- AI voice coach for live feedback  
-
----
-
-## 🔟. Acceptance Criteria
-
+## 7️⃣. Acceptance Criteria  
 | ID | Requirement | Acceptance Criteria |
 |----|--------------|--------------------|
-| AC-01 | AI Plan Generation | Returns a complete JSON plan with valid sets/reps/macros |
-| AC-02 | Workout Tracking | Logs are stored and displayed on dashboard |
-| AC-03 | Meal Tracking | Calories auto-calculated and charted |
-| AC-04 | AI Feedback | Generated weekly message based on user logs |
-| AC-05 | Performance | Dashboard < 2s on average load |
+| AC-01 | Ảnh được phân tích thành công | BodyPix nhận diện đầy đủ thân trên và dưới |
+| AC-02 | AI đưa ra body fat estimate | Sai số < ±3% so với input test |
+| AC-03 | AI sinh plan hợp lý | Có ít nhất 3 bài tập, 3 bữa ăn mỗi ngày |
+| AC-04 | UX hiển thị “Inspired by KOLs” | Có ít nhất 3 câu gợi ý “theo phong cách…” mỗi tuần |
+| AC-05 | Privacy | Ảnh bị xóa khỏi server sau xử lý |
 
 ---
 
-**End of Document**
+## 8️⃣. Future Enhancements  
+| Version | Feature |
+|----------|----------|
+| v1.2 | Live camera feedback (pose tracking) |
+| v1.3 | Đồng bộ Apple Watch / HealthKit |
+| v1.4 | Community leaderboard |
+| v2.0 | Voice-based AI Trainer |
